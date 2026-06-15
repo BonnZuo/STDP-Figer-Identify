@@ -26,10 +26,8 @@
 ├── network.py         # 完整 SNN 网络 + 训练/推理 (NumPy)
 ├── readout.py         # Linear / MLP 读出层 (PyTorch)
 ├── utils.py           # MNIST 加载、泊松编码、权重可视化
-├── train.py           # 纯 STDP 训练脚本 (NumPy)
 ├── train_full.py      # 三阶段训练主脚本 (STDP + 特征提取 + 读出层)
-├── evaluate.py        # 纯 STDP 评估 (按神经元标签投票)
-├── evaluate_mps.py    # STDP + Readout 完整评估
+├── evaluate.py    # 评估脚本 (STDP + Readout)
 ├── requirements.txt   # Python 依赖
 ├── .gitignore
 ├── data/              # MNIST 原始数据 (自动下载)
@@ -65,7 +63,7 @@ python3 train_full.py 60000 400
 ### 评估
 
 ```bash
-python3 evaluate_mps.py
+python3 evaluate.py
 ```
 
 ## 结果
