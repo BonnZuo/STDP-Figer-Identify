@@ -72,7 +72,7 @@ class LIFNeurons:
         """
         # 不应期内神经元不参与更新
         active = self.refrac == 0
-        self.refrac = np.maximum(self.refrac - 1, 0)
+        self.refrac = np.maximum(self.refrac - 1, 0)#剩余不应期步数，不能小于0
 
         # 电导驱动 LIF: E_exc = 0mV，v_rest 和 v 为负值，正电导使膜电位上升
         dv = (self.dt / self.tau_v) * (

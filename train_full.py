@@ -25,9 +25,9 @@ from utils import load_mnist, poisson_encode
 def train_stdp(
     net: SNN,
     train_set,
-    n_train: int,
-    duration: int,
-) -> SNN:
+    n_train: int,#训练的样本数
+    duration: int,#模拟时长
+) -> SNN:#返回训练完成，权重更新完毕的实例
     """
     Phase 1: 无监督 STDP 训练。
 
@@ -45,13 +45,13 @@ def train_stdp(
     返回:
         训练后的 SNN 网络。
     """
-    indices = np.random.choice(len(train_set), n_train, replace=False)
+    indices = np.random.choice(len(train_set), n_train, replace=False)#随机挑选训练样本
 
-    for idx in tqdm(indices, desc="Phase 1: STDP"):
-        img, _ = train_set[idx]
-        spikes = poisson_encode(img, duration=duration)
-        net.reset_state()
-        net.run(spikes, train=True)
+    for idx in tqdm(indices, desc="Phase 1: STDP"):#循环便利每一个图片，然后可视化进度tqdm
+        img, _ = train_set[idx]#取出照片，删掉标签
+        spikes = poisson_encode(img, duration=duration)#泊松编码，转化为脉冲序列
+        net.reset_state()#重置网络所有时序状态
+        net.run(spikes, train=True)#仿真 权重更新，核心训练过程
 
     return net
 
@@ -62,7 +62,7 @@ def extract_features_numpy(
     indices: np.ndarray,
     duration: int,
     desc: str = "Extracting",
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:#返回两个张量，给读出层用
     """
     Phase 2: 从已训练的 SNN 中提取 firing rate 特征。
 
@@ -81,19 +81,19 @@ def extract_features_numpy(
     返回:
         (features, labels) — PyTorch 张量，供读出层训练使用。
     """
-    features_list = []
+    features_list = []#初始化空列表，存储每个样本特征 标签
     labels_list = []
 
-    for idx in tqdm(indices, desc=desc):
-        img, label = dataset[idx]
+    for idx in tqdm(indices, desc=desc):#便利样本，依此处理
+        img, label = dataset[idx]#取出图片和标签
         spikes = poisson_encode(img, duration=duration)
         net.reset_state()
-        record = net.run(spikes, train=False)
-        firing_rates = record.sum(axis=0).astype(np.float32)
-        features_list.append(torch.from_numpy(firing_rates))
+        record = net.run(spikes, train=False)#向前仿真，但关闭训练，不进行权重更新
+        firing_rates = record.sum(axis=0).astype(np.float32)#计算发放率，在时间维度上求和得倒一个400维的数组，统计了400个圣经元在步长内的脉冲量
+        features_list.append(torch.from_numpy(firing_rates))#转tensor存入列表
         labels_list.append(label)
 
-    features = torch.stack(features_list)
+    features = torch.stack(features_list)#循环结束后开始拼接成批量张量
     labels = torch.tensor(labels_list, dtype=torch.long)
     return features, labels
 
@@ -113,7 +113,7 @@ def train(
         duration:     每样本模拟时长 (ms)，默认 350。
         seed:         随机种子。
     """
-    np.random.seed(seed)
+    np.random.seed(seed)#固定随机种子
     torch.manual_seed(seed)
 
     print("加载 MNIST 数据集...")
@@ -126,24 +126,26 @@ def train(
     print(f"Phase 1: STDP 无监督训练 ({n_train_stdp} 样本, {duration}ms, {n_exc} 神经元)")
     print(f"{'='*50}")
 
+    #初始化snn
     net = SNN(n_exc=n_exc)
     t0 = time.time()
     net = train_stdp(net, train_set, n_train=n_train_stdp, duration=duration)
     t1 = time.time()
     print(f"训练耗时: {t1-t0:.0f}s ({n_train_stdp/(t1-t0):.0f} 样本/秒)")
 
-    # 保存 STDP 权重
+    # 保存 STDP训练好的突触权重
     W = net.synapses.W.copy()
     np.save("outputs/weights_full.npy", W)
     print(f"权重已保存到 outputs/weights_full.npy ({W.shape})")
 
     # =========================================================================
-    # Phase 2: 特征提取
+    # Phase 2: 特征提取，冻结snn
     # =========================================================================
     print(f"\n{'='*50}")
     print("Phase 2: 提取 firing rate 特征...")
     print(f"{'='*50}")
 
+    #选取训练集样本下标，提取训练特征
     n_features_train = min(n_train_stdp, len(train_set))
     train_indices = np.random.choice(len(train_set), n_features_train, replace=False)
 
@@ -163,7 +165,7 @@ def train(
     t1 = time.time()
     print(f"测试集特征提取: {t1-t0:.0f}s ({len(test_set)} 样本)")
 
-    # 缓存特征文件，方便后续调试和重训练读出层
+    # 缓存特征文件，方便后续调试和重训练读出层，缓存为pt文件
     torch.save(
         {"features": features_train, "labels": labels_train},
         "outputs/features_train.pt",
@@ -191,7 +193,7 @@ def train(
         weight_decay=1e-4,
         use_mlp=True,
     )
-    torch.save(readout.state_dict(), "outputs/readout_full.pth")
+    torch.save(readout.state_dict(), "outputs/readout_full.pth")#保存读出层权重
     print("读出层已保存到 outputs/readout_full.pth")
 
     # =========================================================================
@@ -201,7 +203,7 @@ def train(
     print("最终评估")
     print(f"{'='*50}")
 
-    train_acc = evaluate_readout(readout, features_train, labels_train)
+    train_acc = evaluate_readout(readout, features_train, labels_train)#关闭梯度，把特征送入 MLP，取 logits 最大值作为预测，计算整体正确率
     test_acc = evaluate_readout(readout, features_test, labels_test)
 
     print(f"\n结果:")
@@ -209,18 +211,18 @@ def train(
     print(f"  测试集准确率: {test_acc:.2%}")
 
     # 各类别准确率
-    with torch.no_grad():
-        logits = readout(features_test)
-        preds = logits.argmax(dim=1)
+    with torch.no_grad():#不用梯度
+        logits = readout(features_test)#一次前向传播
+        preds = logits.argmax(dim=1)#取出预测的类别
 
     print("\n测试集各类别准确率:")
-    for c in range(10):
-        mask = labels_test == c
+    for c in range(10):#循环0-9
+        mask = labels_test == c#筛选等于c的所有样本
         if mask.sum() > 0:
             class_acc = (preds[mask] == c).float().mean().item()
             print(f"  数字 {c}: {class_acc:.1%}")
 
-    return net, readout
+    return net, readout#返回整个完整模型
 
 
 if __name__ == "__main__":

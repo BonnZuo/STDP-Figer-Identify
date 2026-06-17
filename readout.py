@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class LinearReadout(nn.Module):
     """
-    线性读出层: 将 STDP firing-rate 特征直接映射为类别 logits。
+    线性读出层: 将 STDP firing-rate 特征直接映射为类别 logits。没什么用。。。
 
     结构: firing_rates (n_features,) → Linear(n_features, 10) → logits
 
@@ -46,7 +46,7 @@ class MLPReadout(nn.Module):
         n_features: int = 400,
         n_hidden: int = 256,
         n_classes: int = 10,
-        dropout: float = 0.3,
+        dropout: float = 0.3,#随机失活，抑制过拟合
     ):
         super().__init__()
         self.fc1 = nn.Linear(n_features, n_hidden)
@@ -54,6 +54,7 @@ class MLPReadout(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.fc2 = nn.Linear(n_hidden, n_classes)
 
+    #向前传播
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         参数:
@@ -61,15 +62,14 @@ class MLPReadout(nn.Module):
         返回:
             (batch, n_classes) 类别 logits。
         """
-        x = self.fc1(x)
-        x = self.bn(x)
-        x = torch.relu(x)
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
+        x = self.fc1(x)#经过第一层全连接，
+        x = self.bn(x)#批量归一化
+        x = torch.relu(x)#relu激活
+        x = self.dropout(x)#随机屏蔽神经元
+        x = self.fc2(x)#映射到10维
 
 
-# 默认使用 MLP 以获得最佳准确率
+# 调用时只 MLP from readout import Readout
 Readout = MLPReadout
 
 
@@ -77,9 +77,9 @@ def train_readout(
     features: torch.Tensor,
     labels: torch.Tensor,
     n_epochs: int = 100,
-    lr: float = 0.001,
+    lr: float = 0.001,#初始化cpu
     weight_decay: float = 1e-4,
-    batch_size: int = 512,
+    batch_size: int = 512,#batch——size大小
     device: str = "cpu",
     use_mlp: bool = True,
 ) -> nn.Module:
@@ -103,12 +103,13 @@ def train_readout(
         训练好的模型 (eval 模式，已移到 CPU)。
     """
     n_features = features.shape[1]
-    if use_mlp:
+    if use_mlp:#使用mlp方案
         model = MLPReadout(n_features=n_features).to(device)
         n_epochs = max(n_epochs, 300)  # MLP 需要更多轮
     else:
         model = LinearReadout(n_features=n_features).to(device)
 
+    #数据迁移到计算设备
     features = features.to(device)
     labels = labels.to(device)
 
@@ -120,34 +121,36 @@ def train_readout(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=n_epochs
     )
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()#交叉熵损失
 
+    #样本打乱，构造随机索引
     n_samples = features.shape[0]
     indices = torch.randperm(n_samples)  # 全量随机打乱
 
+    #完整的epoch训练循环
     model.train()
     for epoch in range(n_epochs):
         epoch_loss = 0.0
-        for start in range(0, n_samples, batch_size):
+        for start in range(0, n_samples, batch_size):#按batch_size分批训练
             batch_idx = indices[start : start + batch_size]
             x, y = features[batch_idx], labels[batch_idx]
 
-            logits = model(x)
-            loss = criterion(logits, y)
+            logits = model(x)#前向传播
+            loss = criterion(logits, y)#计算分类损失
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad()#清空上一轮梯度
+            loss.backward()#反向传播，计算梯度
+            optimizer.step()#admaw更新训练权重
 
             epoch_loss += loss.item() * len(batch_idx)
 
-        scheduler.step()
-        epoch_loss /= n_samples
+        scheduler.step()#更新学习率
+        epoch_loss /= n_samples#平均每个样本的损失
 
         # 每 50 轮打印一次训练精度
         if (epoch + 1) % 50 == 0 or epoch == 0:
-            model.eval()
-            with torch.no_grad():
+            model.eval()#评估模式
+            with torch.no_grad():#关闭梯度计算
                 pred = model(features).argmax(dim=1)
                 acc = (pred == labels).float().mean().item()
             model.train()
@@ -156,9 +159,10 @@ def train_readout(
                 f"loss={epoch_loss:.4f}  train_acc={acc:.2%}"
             )
 
-    return model.eval().cpu()
+    return model.eval().cpu()#返回训练完成的模型
 
 
+#输入训练好的读出模型，特征，标签，返回 0~1 之间的分类准确率
 def evaluate_readout(
     model: nn.Module,
     features: torch.Tensor,
@@ -176,8 +180,8 @@ def evaluate_readout(
         float 准确率 (0-1)。
     """
     model = model.to(features.device)
-    with torch.no_grad():
-        logits = model(features)
+    with torch.no_grad():#无梯度推理
+        logits = model(features)#特征前向传播得到logits
         preds = logits.argmax(dim=1)
         acc = (preds == labels.to(features.device)).float().mean().item()
     return acc

@@ -19,9 +19,9 @@ def _download_mnist(data_dir: str):
     跳过已存在的文件，避免重复下载。
     """
     import ssl
-    import urllib.request
+    import urllib.request#导入依赖
 
-    raw_dir = os.path.join(data_dir, "MNIST", "raw")
+    raw_dir = os.path.join(data_dir, "MNIST", "raw")#拼接存储路径，创建文件夹
     os.makedirs(raw_dir, exist_ok=True)
 
     base_url = "https://ossci-datasets.s3.amazonaws.com/mnist/"
@@ -32,11 +32,11 @@ def _download_mnist(data_dir: str):
         "t10k-labels-idx1-ubyte.gz",
     ]
 
-    ctx = ssl.create_default_context()
+    ctx = ssl.create_default_context()#ssl证书忽略，绕过检验
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
 
-    for f in files:
+    for f in files:#逐个下载文件夹
         dest = os.path.join(raw_dir, f)
         if not os.path.exists(dest):
             print(f"下载 {f}...")
@@ -54,7 +54,7 @@ def _read_idx(filename: str) -> np.ndarray:
         - 4×N bytes 各维度大小
         - 剩余字节为数据
 
-    返回: (n_samples, n_features) uint8 numpy 数组。
+    返回: (n_samples, n_features) uint8 numpy 数组。返回像素数组
     """
     with gzip.open(filename, "rb") as f:
         magic, n = struct.unpack(">II", f.read(8))
