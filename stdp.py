@@ -33,7 +33,7 @@ class STDPSynapses:
         w_max: float = 1.0,
         A_plus: float = 0.005,
         A_minus: float = 0.00525,
-        tau_pre: float = 20.0,#前突出迹时间常数
+        tau_pre: float = 20.0,#前突出迹时间常数，用于脉冲迹衰减
         tau_post: float = 20.0,#后突出迹时间常数
         dt: float = 1.0,
     ):

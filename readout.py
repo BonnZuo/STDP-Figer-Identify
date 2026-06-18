@@ -67,6 +67,7 @@ class MLPReadout(nn.Module):
         x = torch.relu(x)#relu激活
         x = self.dropout(x)#随机屏蔽神经元
         x = self.fc2(x)#映射到10维
+        return x
 
 
 # 调用时只 MLP from readout import Readout
@@ -77,7 +78,7 @@ def train_readout(
     features: torch.Tensor,
     labels: torch.Tensor,
     n_epochs: int = 100,
-    lr: float = 0.001,#初始化cpu
+    lr: float = 0.001,#初始化学习率
     weight_decay: float = 1e-4,
     batch_size: int = 512,#batch——size大小
     device: str = "cpu",
